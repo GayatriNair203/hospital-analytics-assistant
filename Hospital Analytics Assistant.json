@@ -1,0 +1,529 @@
+{
+  "name": "54-Hospital Analytics Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "trigger": [
+          "app_mention"
+        ],
+        "watchWorkspace": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        -592,
+        32
+      ],
+      "id": "57227bda-53b6-4b9e-9c58-f341cae30df4",
+      "name": "Slack Trigger",
+      "webhookId": "53867909-9caa-43be-8a84-8405ab716f60",
+      "credentials": {
+        "slackApi": {
+          "id": "KbRbL0xrnEwvin3w",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a strict hospital analytics guardrail.  Your job is to determine whether a user's message is related to hospital analytics datasets.  Allowed topics include: - hospitals - healthcare - patient satisfaction - readmission rates - mortality - maternal health - emergency care - hospital ratings - hospital locations - healthcare quality metrics  If the question is related to healthcare or hospital analytics, respond ONLY with: YES  If the question is unrelated, respond ONLY with: NO"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -352,
+        32
+      ],
+      "id": "6d336814-9450-48ea-b069-73324ac4b7e2",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.4-nano",
+          "mode": "list",
+          "cachedResultName": "gpt-5.4-nano"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -352,
+        224
+      ],
+      "id": "b611403f-724c-41bf-9860-12e359d9b354",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "4VubaM6GbLF6FRjD",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "221da638-0164-4eec-b583-639cdb7b9df0",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "YES",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        32
+      ],
+      "id": "6aadef85-3ac5-4201-b5bd-b34e9a873cfa",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Slack Trigger').item.json.text }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "This database is PostgreSQL.\nUse PostgreSQL syntax only.\nNever use square brackets [].\nNever use SQL Server syntax.\nNever use regex.\nNever use score ~ conditions.\nKeep SQL simple.\n\nYou are a PostgreSQL SQL generator for a hospital analytics database.\n\nONLY use these tables:\nhospital_general_information\nunplanned_hospital_visits_hospital\ncomplications_and_deaths_hospital\nmaternal_health_hospital\ntimely_and_effective_care_hospital\n\nNEVER invent table names.\nNEVER invent column names.\nDo not rename columns using aliases.\n\nCOMMON JOIN KEY:\nAll tables can be joined using facility_id.\n\nIMPORTANT:\nDo not join more than 2 datasets in a single SQL query.\n\nIf a question requires more than 2 datasets:\nReturn a query using the 2 most relevant datasets only.\n\nAlways return these exact column names when available:\nfacility_id\nfacility_name\nstate\nmeasure_name\nscore\n\nhospital_general_information columns:\nfacility_id\nfacility_name\ncity_town\nstate\nhospital_overall_rating\nhospital_type\nhospital_ownership\nemergency_services\nmeets_criteria_for_birthing_friendly_designation\n\nunplanned_hospital_visits_hospital columns:\nfacility_id\nfacility_name\ncity_town\nstate\nmeasure_name\ncompared_to_national\ndenominator\nscore\nlower_estimate\nhigher_estimate\nnumber_of_patients\nnumber_of_patients_returned\n\ncomplications_and_deaths_hospital columns:\nfacility_id\nfacility_name\ncity_town\nstate\nmeasure_name\ncompared_to_national\ndenominator\nscore\nlower_estimate\nhigher_estimate\n\nmaternal_health_hospital columns:\nfacility_id\nfacility_name\ncity_town\nstate\nmeasure_name\nscore\nsample\n\ntimely_and_effective_care_hospital columns:\nfacility_id\nfacility_name\ncity_town\nstate\ncondition\nmeasure_name\nscore\nsample\n\nRULES:\nReturn ONLY executable PostgreSQL SQL.\nDo not use markdown.\nDo not explain anything.\nAlways include facility_id in SELECT results.\nDefault to LIMIT 10 only when the user does not specify a number.\n\nUse DISTINCT when appropriate.\nPrefer one row per facility_id.\n\nVisualization rules:\n- 1–5 rows → Text only\n- 6–20 rows → Text + Chart\n- More than 20 rows → Do not generate results\n\nIf the user requests more than 20 results, return this exact SQL:\nSELECT 'Too many results were requested. Please request 20 or fewer records for better readability and visualization.' AS message;\n\nFor comparison questions:\n- Return multiple different hospitals, not multiple measures from the same hospital.\n- Use DISTINCT ON (facility_id) when appropriate.\n- Return one representative measure per hospital.\n- Order by facility_name or hospital_overall_rating when no specific ranking is requested.\n\nWhen filtering by city, state, facility name, condition, or measure name, use ILIKE.\n\nWhen filtering by state:\n- Texas → state ILIKE '%TX%'\n- California → state ILIKE '%CA%'\n- Florida → state ILIKE '%FL%'\n- New York → state ILIKE '%NY%'\n\nWhen using score:\nscore IS NOT NULL\nAND score NOT ILIKE '%Not Available%'\nAND score NOT ILIKE '%Not Applicable%'\n\nWhen sorting score numerically:\nUse score::numeric\n\nLower is better for:\n- readmission\n- mortality\n- complications\n- infections\n- respiratory failure\n\nHigher is better for:\n- hospital ratings\n- positive quality measures\n- timely/effective care\n\nFor Yes/No measures:\nYes = positive indicator\n\nOnly return columns directly relevant to the user's question.\n\nExamples:\n- Ratings question → include hospital_overall_rating\n- Emergency services question → include emergency_services\n- Readmission question → include measure_name and score\n- Ownership question → include hospital_ownership\n\nFor words like \"high\" or \"highest\", follow the user's wording literally.\n\nFor words like \"best\", \"worst\", \"strongest\", \"weakest\", or \"top-performing\", interpret score direction using the metric meaning.\n\nWhen the user explicitly requests a number of results:\n- \"top 5\" → LIMIT 5\n- \"show 3\" → LIMIT 3\n- \"give me 20\" → LIMIT 20\n- \"list 7 hospitals\" → LIMIT 7\n\nUse that exact number in the SQL LIMIT clause.\n\nNever return more or fewer rows than the requested number unless fewer matching records exist.\n\nIf the user asks to show rows from a specific table:\nReturn facility_id, facility_name, state, measure_name, score."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        208,
+        -64
+      ],
+      "id": "e31ccd96-f725-4903-a3ef-cbfbc574f24a",
+      "name": "Basic LLM Chain1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.5",
+          "mode": "list",
+          "cachedResultName": "gpt-5.5"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        -240
+      ],
+      "id": "fabaa360-88e7-43b1-9ce9-563983899921",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "4VubaM6GbLF6FRjD",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.text.replace(/\\\\n/g, ' ') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        560,
+        -64
+      ],
+      "id": "19897544-e37e-4bad-87ee-c915653cc56d",
+      "name": "Execute a SQL query",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "xMlhgH6YWf4FWOPE",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(item => item.json);\n\nif (\n  rows.length === 0 ||\n  rows.every(row => Object.keys(row).length === 0)\n) {\n  return [{\n    json: {\n      message: \"No matching hospital records were found for that question.\"\n    }\n  }];\n}\n\nlet message = \"Here are the results I found:\\n\\n\";\n\nrows.slice(0, 10).forEach((row, index) => {\n  let block = `${index + 1}. ${row.facility_name || \"Unknown Hospital\"}\\n`;\n\n  if (row.facility_id) {\n    block += `   Facility ID: ${row.facility_id}\\n`;\n  }\n\n  if (row.state) {\n    block += `   State: ${row.state}\\n`;\n  }\n\n  if (row.hospital_overall_rating) {\n    block += `   Overall Rating: ${row.hospital_overall_rating}\\n`;\n  }\n\n  if (row.emergency_services) {\n    block += `   Emergency Services: ${row.emergency_services}\\n`;\n  }\n\n  if (row.hospital_type) {\n    block += `   Hospital Type: ${row.hospital_type}\\n`;\n  }\n\n  if (row.hospital_ownership) {\n    block += `   Ownership: ${row.hospital_ownership}\\n`;\n  }\n\n  if (row.measure_name) {\n    block += `   Measure: ${row.measure_name}\\n`;\n  }\n\n  if (row.maternal_measure) {\n    block += `   Maternal Measure: ${row.maternal_measure}\\n`;\n  }\n\n  if (row.complication_measure) {\n    block += `   Complication Measure: ${row.complication_measure}\\n`;\n  }\n\n  if (row.readmission_measure) {\n    block += `   Readmission Measure: ${row.readmission_measure}\\n`;\n  }\n\n  if (row.condition) {\n    block += `   Condition: ${row.condition}\\n`;\n  }\n\n  if (row.score) {\n    block += `   Score: ${row.score}\\n`;\n  }\n\n  if (row.sample) {\n    block += `   Sample: ${row.sample}\\n`;\n  }\n\n  if (row.compared_to_national) {\n    block += `   Compared to National: ${row.compared_to_national}\\n`;\n  }\n\n  if (row.number_of_patients_returned) {\n    block += `   Patients Returned: ${row.number_of_patients_returned}\\n`;\n  }\n\n  const measureText = [\n    row.measure_name,\n    row.maternal_measure,\n    row.complication_measure,\n    row.readmission_measure,\n    row.condition\n  ]\n    .filter(Boolean)\n    .join(\" \")\n    .toLowerCase();\n\n  if (measureText) {\n    block += \"\\n   Insight: \";\n\n    if (measureText.includes(\"readmission\") || measureText.includes(\"return\")) {\n      block += \"Lower readmission or return-visit scores generally indicate better performance.\\n\";\n    } else if (measureText.includes(\"death\") || measureText.includes(\"mortality\")) {\n      block += \"Lower mortality scores generally indicate better outcomes.\\n\";\n    } else if (\n      measureText.includes(\"complication\") ||\n      measureText.includes(\"infection\") ||\n      measureText.includes(\"respiratory failure\") ||\n      measureText.includes(\"patient safety\") ||\n      measureText.includes(\"adverse events\") ||\n      measureText.includes(\"fall\") ||\n      measureText.includes(\"fracture\") ||\n      measureText.includes(\"puncture\") ||\n      measureText.includes(\"laceration\") ||\n      measureText.includes(\"pneumothorax\") ||\n      measureText.includes(\"embolism\") ||\n      measureText.includes(\"thrombosis\") ||\n      measureText.includes(\"hemorrhage\") ||\n      measureText.includes(\"hematoma\")\n    ) {\n      block += \"Lower complication-related scores generally indicate safer care.\\n\";\n    } else if (measureText.includes(\"maternal\")) {\n      block += \"Maternal measures indicate whether the hospital reports maternal health-related quality information.\\n\";\n    } else {\n      block += \"This result matches the requested hospital quality criteria.\\n\";\n    }\n  } else if (row.hospital_overall_rating) {\n    block += `\\n   Insight: Hospital overall rating is ${row.hospital_overall_rating}/5.\\n`;\n  }\n\n  const sources = [];\n\n  if (\n    row.hospital_overall_rating ||\n    row.emergency_services ||\n    row.hospital_type ||\n    row.hospital_ownership\n  ) {\n    sources.push(\"hospital_general_information\");\n  }\n\n  if (\n    row.measure_name &&\n    (\n      row.measure_name.toLowerCase().includes(\"readmission\") ||\n      row.measure_name.toLowerCase().includes(\"return\")\n    )\n  ) {\n    sources.push(\"unplanned_hospital_visits_hospital\");\n  }\n\n  if (\n    row.readmission_measure\n  ) {\n    sources.push(\"unplanned_hospital_visits_hospital\");\n  }\n\n  if (\n    row.measure_name &&\n    (\n      row.measure_name.toLowerCase().includes(\"death\") ||\n      row.measure_name.toLowerCase().includes(\"mortality\") ||\n      row.measure_name.toLowerCase().includes(\"complication\") ||\n      row.measure_name.toLowerCase().includes(\"infection\") ||\n      row.measure_name.toLowerCase().includes(\"fracture\") ||\n      row.measure_name.toLowerCase().includes(\"embolism\") ||\n      row.measure_name.toLowerCase().includes(\"thrombosis\") ||\n      row.measure_name.toLowerCase().includes(\"puncture\") ||\n      row.measure_name.toLowerCase().includes(\"laceration\") ||\n      row.measure_name.toLowerCase().includes(\"pneumothorax\") ||\n      row.measure_name.toLowerCase().includes(\"hemorrhage\") ||\n      row.measure_name.toLowerCase().includes(\"hematoma\") ||\n      row.measure_name.toLowerCase().includes(\"patient safety\") ||\n      row.measure_name.toLowerCase().includes(\"adverse events\")\n    )\n  ) {\n    sources.push(\"complications_and_deaths_hospital\");\n  }\n\n  if (row.complication_measure) {\n    sources.push(\"complications_and_deaths_hospital\");\n  }\n\n  if (\n    row.maternal_measure ||\n    (\n      row.measure_name &&\n      row.measure_name.toLowerCase().includes(\"maternal\")\n    )\n  ) {\n    sources.push(\"maternal_health_hospital\");\n  }\n\n  if (row.condition) {\n    sources.push(\"timely_and_effective_care_hospital\");\n  }\n\n  if (sources.length > 0) {\n    block += `\\n   Source: ${[...new Set(sources)].join(\" + \")}\\n`;\n  }\n\n  message += block + \"\\n\";\n});\n\nreturn [{\n  json: {\n    message\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        208
+      ],
+      "id": "35c9a1c3-35b7-48ce-b3da-0aeb5fe00e05",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{$('Slack Trigger').first().json.channel}}",
+          "mode": "id"
+        },
+        "text": "={{ $json.message }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        1344,
+        208
+      ],
+      "id": "3d84369c-bd35-4acc-b9de-61ab0b5c44ab",
+      "name": "Send a message",
+      "webhookId": "f05a4057-8529-4031-989e-0b32c64186c5",
+      "credentials": {
+        "slackApi": {
+          "id": "KbRbL0xrnEwvin3w",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    message: \"I am unable to answer that. I can only provide insights based on the hospital analytics datasets.\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        128
+      ],
+      "id": "7a317814-220d-4901-b759-65a6f0679bba",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{$('Slack Trigger').first().json.channel}}",
+          "mode": "id"
+        },
+        "text": "={{$json.message}}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        480,
+        128
+      ],
+      "id": "e76427c8-7251-4aa2-ab08-3f8c4772e931",
+      "name": "Send a message1",
+      "webhookId": "8cc99c00-4d77-4d10-8a03-5ef1a05d17b8",
+      "credentials": {
+        "slackApi": {
+          "id": "KbRbL0xrnEwvin3w",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b34ca729-8e69-44f7-b15e-965547f9ad4a",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        768,
+        -64
+      ],
+      "id": "a8308929-4794-472d-86ee-6ff11d169c22",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(item => item.json);\n\nconst chartData = rows\n  .slice(0,10)\n  .map(r => ({\n    hospital: r.facility_name,\n    score: Number(r.score)\n  }))\n  .filter(r => !isNaN(r.score));\n\nreturn [{\n  json: {\n    labels: chartData.map(x => x.hospital),\n    values: chartData.map(x => x.score)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -288
+      ],
+      "id": "836111d1-04d4-4694-afb8-2fd9c9b4ccd4",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://quickchart.io/chart/create",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chart",
+              "value": "={{ JSON.stringify({\n  type: \"horizontalBar\",\n  data: {\n    labels: $json.labels,\n    datasets: [{\n      label: \"Hospital Score\",\n      data: $json.values\n    }]\n  },\n  options: {\n    responsive: true,\n    legend: {\n      display: false\n    },\n    scales: {\n      xAxes: [{\n        ticks: {\n          beginAtZero: true\n        }\n      }],\n      yAxes: [{\n        ticks: {\n          fontSize: 10\n        }\n      }]\n    }\n  }\n}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1296,
+        -288
+      ],
+      "id": "c4944992-6a56-4162-9f55-59a9f32b8ba1",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B5HAVKM36",
+          "mode": "id"
+        },
+        "text": "={{$json.url}}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        1504,
+        -288
+      ],
+      "id": "8830085c-297f-4a39-9def-483caccdbd59",
+      "name": "Send a message2",
+      "webhookId": "c3982fce-32f3-4e2a-8706-920affd36f6a",
+      "credentials": {
+        "slackApi": {
+          "id": "KbRbL0xrnEwvin3w",
+          "name": "Slack account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain1": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message2": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "037d6a82-5d79-4ec6-95d2-85694893d12d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fabc2c779309c3195c4fb005a09b3578af2ae8be20e468cb326b674177186465"
+  },
+  "id": "mxGgwHlmhrg8F1xa",
+  "tags": []
+}
